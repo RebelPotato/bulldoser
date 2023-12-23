@@ -1,0 +1,28 @@
+<% layout("./base.eta") %>
+<h1>推笔记</h1>
+<p>
+    <a href="/notes/new">新笔记</a>
+</p>
+
+<form action="/notes" method="get" class="tool-bar">
+    <label for="search">Search Term</label>
+    <input id="search" type="search" name="q" value="<% it.search %>"
+        hx-get="/notes"
+        hx-trigger="search, keyup delay:200ms changed"
+        hx-target="tbody"
+        hx-select="tbody tr"/>
+    <input type="submit" value="Search"/>
+</form>
+
+<table>
+    <thead>
+    <tr>
+        <th>标题</th> <th>陈旧因子</th> <th>复习时间</th> <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    <%~ include("./rows.eta", {notes: it.notes, page: it.page}) %>
+    </tbody>
+</table>
+
+

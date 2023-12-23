@@ -1,0 +1,11 @@
+<% layout("./base.eta") %>
+<h1><%= it.note.title %></h1>
+<div>
+  <div> 陈旧因子：<%= it.note.staleness %> </div>
+  <div> 复习日期：<%= it.note.review.toLocaleString() %> </div>
+  <%~ it.note.stringify() %>
+</div>
+
+<p>
+  <a href="/notes">返回</a>
+</p>

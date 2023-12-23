@@ -1,0 +1,28 @@
+<% it.notes.forEach((note) => { %>
+    <tr>
+        <td><%= note.title %></td>
+        <td><%= note.staleness %></td>
+        <td><%= note.dateString() %></td>
+        <td><a href="/notes/<%= note.title %>/edit">编辑</a>
+            <a href="/notes/<%= note.title %>">查看</a>
+            <a href="/notes/<%= note.title %>/postpone">推迟</a>
+            <a href="#" hx-delete="/notes/<%= note.title %>"
+            hx-swap="outerHTML swap:1s"
+            hx-confirm="确认删除这条笔记吗？"
+            hx-target="closest tr">删除</a></td>
+    </tr>
+<% }) %>
+
+<% if(it.notes.length==10) { %>
+<tr>
+    <td colspan="5" style="text-align: center">
+        <span hx-target="closest tr"
+            hx-trigger="revealed"
+            hx-swap="outerHTML"
+            hx-select="tbody > tr"
+            hx-get="/notes?page=<%= it.page+1 %>">
+            加载更多……
+        </span>
+    </td>
+</tr>
+<% } %>

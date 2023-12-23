@@ -1,0 +1,33 @@
+<% layout("./base.eta") %>
+<h1>编辑笔记</h1>
+<form action="/notes/<%= it.config.title %>/edit" method="post"> 
+  <fieldset>
+    <legend>设置</legend>
+    <p>
+      <label for="title">标题</label> 
+      <input name="title" id="title" type="title"
+        hx-get="/notes/<%= it.config.title %>/title"
+        hx-target="next .error"
+        hx-trigger="change, keyup delay:200ms changed"
+        placeholder="标题" value="<%= it.config.title %>"> 
+      <span class="error"> <%= it.config.errors.title || '' %> </span> 
+    </p>
+    <input name="oldTitle" type="hidden" value="<%= it.config.title %>">
+    <button>Save</button>
+  </fieldset>
+</form>
+
+<form action="/notes/<%= it.config.title %>/postpone" method="post">
+  <button>推迟笔记</button>
+</form>
+
+<button id="delete-btn"
+        hx-delete="/notes/<%= it.config.title %>" 
+        hx-push-url="true"
+        hx-confirm="确认删除这条笔记吗？"
+        hx-target="body">
+  删除笔记</button>
+
+<p>
+  <a href="/notes">返回</a>
+</p>

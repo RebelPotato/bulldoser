@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="htmx.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <title>推笔记</title>
+  </head>
+  <body  hx-boost="true">
+    <%~ it.body %>
+  </body>
+</html>

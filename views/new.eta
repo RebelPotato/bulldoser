@@ -1,0 +1,21 @@
+<% layout("./base.eta") %>
+<h1>新建笔记</h1>
+<form action="/notes/new" method="post"> 
+  <fieldset>
+    <legend>设置</legend>
+    <p>
+      <label for="title">标题</label>
+      <input name="title" id="title" type="title"
+        hx-get="/notes/new/title"
+        hx-target="next .error"
+        hx-trigger="change, keyup delay:200ms changed"
+        placeholder="标题" value="<%= it.config.title %>"> 
+      <span class="error"> <%= it.config.errors.title || '' %> </span> 
+    </p>
+    <button>Save</button>
+  </fieldset>
+</form>
+
+<p>
+  <a href="/notes">Back</a>
+</p>

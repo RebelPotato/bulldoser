@@ -11,6 +11,14 @@ type FileConfig = {
 };
 const config: FileConfig = JSON.parse(await Deno.readTextFile("./config.json"));
 
+function inbox(title: string){
+  return config.path + "/inbox/" + title + ".md";
+}
+
+function archive(title: string){
+  return config.path + "/archive/" + title + ".md";
+}
+
 type Tree = {
   children: Array<{
     value: string;
@@ -74,10 +82,25 @@ class Note {
     const d = Math.pow(2, this.staleness);
     this.staleness++;
     this.review.setTime(this.review.getTime() + d * 86400000);
+    this.sync();
   }
   stringify() {
     const headerString = "---\n" + this.toYaml() + "---\n";
     return headerString + writer.stringify(this.contents);
+  }
+  sync() {
+    Deno.writeTextFileSync(
+      inbox(this.title),
+      this.stringify(),
+    );
+  }
+  rename(newTitle: string) {
+    Deno.renameSync(inbox(this.title), inbox(newTitle))
+    this.title = newTitle;
+    this.sync();
+  }
+  archive() {
+    Deno.renameSync(inbox(this.title), archive(this.title))
   }
 }
 
@@ -89,10 +112,10 @@ function toNote(value: string, contents: Tree): Note {
   return new Note(obj.title, contents, obj.staleness, time);
 }
 
-async function readNote(entry: Deno.DirEntry) {
+function readNote(entry: Deno.DirEntry) {
   if (!entry.isFile) return;
   const tree: Tree = reader.parse(
-    await Deno.readTextFile(config.path + "/inbox/" + entry.name),
+    Deno.readTextFileSync(config.path + "/inbox/" + entry.name),
   );
   const val = tree.children[0].value;
   tree.children.shift();
@@ -100,46 +123,44 @@ async function readNote(entry: Deno.DirEntry) {
   return note;
 }
 
-type InboxResult = "ok" | { error: string }
-
-async function writeInbox(note: Note): Promise<InboxResult> {
-  await Deno.writeTextFile(
-    config.path + "/inbox/" + note.title + ".md",
-    note.stringify(),
-  );
-  return "ok";
-}
-
-async function renameInbox(oldTitle: string, note: Note): Promise<InboxResult> {
-  // console.log(`Renameing ${oldTitle}.md to ${note.title}.md`)
-  await writeInbox(note);
-  await Deno.remove(config.path + "/inbox/" + oldTitle + ".md");
-  return "ok";
-}
-
-async function readNotes(): Promise<Note[]> {
-  const notes: Note[] = [];
-  for await (const entry of Deno.readDir(config.path + "/inbox")) {
-    const n = await readNote(entry);
-    if (n != undefined) notes.push(n);
+// 
+class Notebook {
+  contents: Map<string, Note>
+  constructor() {
+    this.contents = new Map();
+    for (const entry of Deno.readDirSync(config.path + "/inbox")){
+      const n = readNote(entry);
+      if (n != undefined) this.contents.set(n.title, n);
+    }
   }
-  notes.sort((a,b) => a.review.valueOf() - b.review.valueOf())
-  return notes;
+  all() {
+    const arr = []
+    for (const note of this.contents.values()) arr.push(note);
+    return arr.sort((a,b) => a.review.valueOf()-b.review.valueOf())
+  }
+  has(title: string) {
+    return this.contents.has(title);
+  }
+  get(title: string) {
+    return this.contents.get(title);
+  }
+  add(n: Note) {
+    this.contents.set(n.title, n);
+    n.sync();
+  }
+  rename(title: string, newTitle: string) {
+    const n = this.contents.get(title);
+    if (n == undefined) return;
+    n.rename(newTitle);
+    this.contents.set(newTitle, n);
+    this.contents.delete(title);
+  }
+  archive(title: string) {
+    const n = this.contents.get(title);
+    if (n == undefined) return;
+    n.archive();
+    this.contents.delete(title);
+  }
 }
 
-async function deleteInbox(note: Note) {
-  await Deno.rename(config.path + "/inbox/" + note.title + ".md", config.path + "/archive/" + note.title + ".md")
-}
-
-function syncNotes(notes: Note[]) {
-  // console.log("Syncing")
-  notes.forEach(async n => await writeInbox(n))
-  // console.log("Done")
-}
-
-// const arr = await readNotes()
-// const n = arr[3]
-// console.log(n.stringify())
-
-export { writeInbox, renameInbox, deleteInbox,  Note, readNotes, syncNotes };
-export type { InboxResult };
+export { Notebook,  Note };

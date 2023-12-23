@@ -1,7 +1,7 @@
 import type { Application, Request, Response } from "https://esm.sh/express@4.18.2";
 import express from "https://esm.sh/express@4.18.2";
 import { Eta } from "https://deno.land/x/eta@v3.1.0/src/index.ts";
-import { writeInbox, renameInbox, deleteInbox, readNotes, syncNotes, Note, InboxResult } from "./readwrite.ts";
+import { Notebook, Note } from "./readwrite.ts";
 
 const app: Application = express();
 app.use(express.urlencoded({ extended: true }))
@@ -16,17 +16,16 @@ app.get("/", (_req: Request, res: Response) => {
   res.redirect("/notes");
 });
 
-app.get("/notes", async (req: Request, res: Response) => {
+app.get("/notes", (req: Request, res: Response) => {
   const search: string = req.query.q;
   const page: number = parseInt(req.query.page) || 1;
-  const notes = await readNotes();
-  syncNotes(notes);
+  const notes = new Notebook();
 
   if(search!=undefined){ 
     let temp = "index";
     if(req.get('HX-Trigger')=="search") temp = "rows";
     res.status(200).send(eta.render(temp, {
-      notes: notes
+      notes: notes.all()
         .filter(note => {
           try {
             return note.title.match(search)!=null
@@ -41,7 +40,7 @@ app.get("/notes", async (req: Request, res: Response) => {
   }
 
   res.status(200).send(eta.render("index", {
-    notes: notes.slice(page*10-10,page*10),
+    notes: notes.all().slice(page*10-10,page*10),
     page: page,
     search: ""
   }));
@@ -57,8 +56,7 @@ type newConfig = {
 }
 
 app.get("/notes/new", (req: Request, res: Response) => {
-  const title: string | undefined = req.params.title;
-  console.log(title);
+  const title: string | undefined = req.query.title;
   const defaultConfig: newConfig = {
     config: {
       title: title || "",
@@ -70,25 +68,23 @@ app.get("/notes/new", (req: Request, res: Response) => {
   res.status(200).send(eta.render("new", defaultConfig));
 });
 
-app.post("/notes/new", async (req: Request, res: Response) => {
+app.post("/notes/new", (req: Request, res: Response) => {
   const f = req.body;
-  let result: InboxResult;
-  const notes = await readNotes();
-  if(notes.some(note => note.title == f.title)){
-    result = {error: "文件已存在"}
+  let result: string | undefined;
+  const notes = new Notebook();
+  if(notes.has(f.title)){
+    result = "文件已存在"
   } else {
-    result = await writeInbox(new Note(f.title));
+    notes.add(new Note(f.title));
   }
 
-  if(result == "ok") {
-    res.redirect("/notes");
-  }
+  if(result == undefined) res.redirect("/notes");
   else {
     const errorConfig: newConfig = {
       config: {
         title: f.title,
         errors: {
-          title: result.error
+          title: result
         }
       }
     }
@@ -96,18 +92,19 @@ app.post("/notes/new", async (req: Request, res: Response) => {
   }
 })
 
-app.get("/notes/new/title", async (req: Request, res: Response) => {
-  const notes = await readNotes();
+app.get("/notes/new/title", (req: Request, res: Response) => {
   const newTitle: string = req.query.title;
-  if(notes.some(note => note.title == newTitle)) {
+  const notes = new Notebook();
+  if(notes.has(newTitle)) {
     res.send("文件已存在")
   }
   res.send("")
 })
 
-app.get("/notes/:title", async (req: Request, res: Response) => {
+app.get("/notes/:title", (req: Request, res: Response) => {
   const title = req.params.title;
-  const note = (await readNotes()).find(note => note.title == title);
+  const notes = new Notebook();
+  const note = notes.get(title);
   if(note == undefined) {
     res.redirect("/notes/new?title=" + encodeURI(title));
     return;
@@ -115,10 +112,10 @@ app.get("/notes/:title", async (req: Request, res: Response) => {
   res.status(200).send(eta.render("show", {note: note}));
 })
 
-app.get("/notes/:title/edit", async (req: Request, res: Response) => {
+app.get("/notes/:title/edit", (req: Request, res: Response) => {
   const title: string = req.params.title;
-  const note = (await readNotes()).find(note => note.title == title);
-  if(note == undefined) {
+  const notes = new Notebook();
+  if(!notes.has(title)) {
     res.redirect("/notes/new?title=" + title);
     return;
   }
@@ -133,35 +130,33 @@ app.get("/notes/:title/edit", async (req: Request, res: Response) => {
   res.status(200).send(eta.render("edit", editConfig));
 })
 
-app.get("/notes/:title/title", async (req: Request, res: Response) => {
+app.get("/notes/:title/title", (req: Request, res: Response) => {
   const title: string = req.params.title;
-  const notes = await readNotes();
-  if(!notes.some(note => note.title == title)) {
+  const notes = new Notebook
+  if(!notes.has(title)) {
     res.redirect("/notes/new?title=" + title);
     return;
   }
   const newTitle: string = req.query.title;
-  if(notes.some(note => note.title == newTitle)) {
+  if(notes.has(newTitle)) {
     res.send("文件已存在")
   }
   res.send("")
 })
 
-app.post("/notes/:title/edit", async (req: Request, res: Response) => {
+app.post("/notes/:title/edit", (req: Request, res: Response) => {
   const f: {oldTitle: string, title: string} = req.body;
-  let result: InboxResult;
-  const notes = await readNotes();
-  const note = notes.find(note => note.title == f.oldTitle);
-  if(note == undefined){
-    result = {error: "文件不存在"}
-  } else if (notes.some((note => note.title == f.title))){
-    result = {error: "新文件已存在"}
+  let result: string | undefined;
+  const notes = new Notebook()
+  if(!notes.has(f.oldTitle)){
+    result = "文件不存在"
+  } else if (notes.has(f.title)){
+    result = "新文件已存在"
   } else {
-    note.title = f.title;
-    result = await renameInbox(f.oldTitle, note);
+    notes.rename(f.oldTitle, f.title)
   }
 
-  if(result == "ok") {
+  if(result == undefined) {
     res.redirect("/notes");
   }
   else {
@@ -169,7 +164,7 @@ app.post("/notes/:title/edit", async (req: Request, res: Response) => {
       config: {
         title: f.oldTitle,
         errors: {
-          title: result.error
+          title: result
         }
       }
     }
@@ -179,24 +174,23 @@ app.post("/notes/:title/edit", async (req: Request, res: Response) => {
 
 app.get("/notes/:title/postpone", async (req: Request, res: Response) => {
   const title: string = req.params.title;
-  const note = (await readNotes()).find(note => note.title == title);
+  const note = (new Notebook()).get(title);
   if(note == undefined) {
     res.redirect("/notes/new?title=" + title);
     return;
   }
   note.postpone();
-  await writeInbox(note);
   res.redirect("/notes");
 })
 
 app.delete("/notes/:title", async (req: Request, res: Response) => {
   const title: string = req.params.title;
-  const note = (await readNotes()).find(note => note.title == title);
-  if(note == undefined) {
+  const notes = new Notebook();
+  if(!notes.has(title)) {
     res.redirect("/notes/new?title=" + title);
     return;
   }
-  await deleteInbox(note);
+  notes.archive(title);
   if(req.get('HX-Trigger')=="delete-btn"){
     res.redirect(303, "/notes");
   } else {
